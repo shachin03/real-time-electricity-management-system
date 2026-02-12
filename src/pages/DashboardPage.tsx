@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { DashboardShell } from "../components/layout/DashboardShell";
+import { DashboardShell, SectionId } from "../components/layout/DashboardShell";
 import { SectionHeader } from "../components/layout/SectionHeader";
 import { useRealtimeElectricity } from "../hooks/useRealtimeElectricity";
 import { StatCard } from "../components/stats/StatCard";
@@ -12,12 +12,9 @@ import {
   UiNotification
 } from "../components/alerts/NotificationPanel";
 import { InsightsCards } from "../components/insights/InsightsCards";
+import { MiniPowerTrend } from "../components/charts/MiniPowerTrend";
 
-type DashboardPageProps = {
-  onBackToLanding: () => void;
-};
-
-export const DashboardPage = ({ onBackToLanding }: DashboardPageProps) => {
+export const DashboardPage = () => {
   const { latest, samples, insights, hourlyBreakdown, distribution } =
     useRealtimeElectricity();
 
@@ -32,6 +29,7 @@ export const DashboardPage = ({ onBackToLanding }: DashboardPageProps) => {
 
   const [notifications, setNotifications] = useState<UiNotification[]>([]);
   const [hasCrossedAbove, setHasCrossedAbove] = useState(false);
+  const [alertsEnabled, setAlertsEnabled] = useState(true);
   const lastPowerRef = useRef<number | undefined>(undefined);
 
   const isAboveThreshold =
@@ -39,7 +37,7 @@ export const DashboardPage = ({ onBackToLanding }: DashboardPageProps) => {
 
   // Track changes around threshold to create smart, non-spammy notifications
   useEffect(() => {
-    if (!latest) return;
+    if (!latest || !alertsEnabled) return;
 
     const prevPower = lastPowerRef.current;
     lastPowerRef.current = latest.power;
@@ -75,7 +73,7 @@ export const DashboardPage = ({ onBackToLanding }: DashboardPageProps) => {
         browserPermission
       );
     }
-  }, [latest, thresholdW, browserPermission, hasCrossedAbove]);
+  }, [latest, thresholdW, browserPermission, hasCrossedAbove, alertsEnabled]);
 
   const pushNotification = (
     payload: Omit<UiNotification, "id" | "createdAt">,
@@ -116,7 +114,7 @@ export const DashboardPage = ({ onBackToLanding }: DashboardPageProps) => {
   };
 
   const rightHeaderSlot = latest && (
-    <div className="hidden sm:flex items-center gap-3 text-[11px] text-slate-400">
+    <div className="flex items-center gap-3 text-[11px] text-slate-400">
       <span className="inline-flex items-center gap-1 rounded-full bg-emerald-500/10 text-emerald-300 border border-emerald-500/60 px-2 py-1">
         <span className="h-1.5 w-1.5 rounded-full bg-emerald-400 animate-ping" />
         Live
@@ -133,16 +131,59 @@ export const DashboardPage = ({ onBackToLanding }: DashboardPageProps) => {
     </div>
   );
 
+  // Sidebar navigation
+  const [activeSection, setActiveSection] = useState<SectionId>("overview");
+  const overviewRef = useRef<HTMLDivElement | null>(null);
+  const analyticsRef = useRef<HTMLDivElement | null>(null);
+  const alertsRef = useRef<HTMLDivElement | null>(null);
+  const insightsRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSelectSection = (id: SectionId) => {
+    setActiveSection(id);
+    const map: Record<SectionId, React.RefObject<HTMLDivElement>> = {
+      overview: overviewRef,
+      analytics: analyticsRef,
+      alerts: alertsRef,
+      insights: insightsRef
+    };
+    const el = map[id].current;
+    if (el) {
+      el.scrollIntoView({ behavior: "smooth", block: "start" });
+    }
+  };
+
+  const navItems = [
+    { id: "overview" as SectionId, label: "Overview" },
+    { id: "analytics" as SectionId, label: "Analytics" },
+    { id: "alerts" as SectionId, label: "Alerts" },
+    { id: "insights" as SectionId, label: "Insights" }
+  ];
+
+  const systemStatusLabel = !latest
+    ? "Waiting for data stream…"
+    : alertsEnabled && isAboveThreshold
+    ? "Attention · Above threshold"
+    : "Healthy · Within limits";
+
+  const systemStatusTone =
+    !latest || (!alertsEnabled && !isAboveThreshold)
+      ? "border-slate-700/80 text-slate-200"
+      : alertsEnabled && isAboveThreshold
+      ? "border-red-500/60 text-red-200 bg-red-500/10"
+      : "border-emerald-500/60 text-emerald-200 bg-emerald-500/10";
+
   return (
     <DashboardShell
       title="Live dashboard"
       description="Streaming voltage, current, power and energy from your IoT hardware."
-      onBack={onBackToLanding}
+      navItems={navItems}
+      activeSection={activeSection}
+      onSelectSection={handleSelectSection}
       rightSlot={rightHeaderSlot}
     >
       <div className="space-y-5 lg:space-y-6">
         {/* Overview section */}
-        <section>
+        <section ref={overviewRef} id="overview" className="scroll-mt-20">
           <SectionHeader
             title="Overview"
             subtitle="Live electrical parameters at a glance for your selected panel or circuit."
@@ -177,43 +218,91 @@ export const DashboardPage = ({ onBackToLanding }: DashboardPageProps) => {
               trendLabel="Cumulative energy since midnight (simulated)."
             />
           </div>
-        </section>
 
-        {/* Trends & thresholds section */}
-        <section>
-          <SectionHeader
-            title="Trends & thresholds"
-            subtitle="Track how consumption is evolving over time and configure safety limits."
+          <MiniPowerTrend
+            samples={samples}
+            isAboveThreshold={alertsEnabled && isAboveThreshold}
           />
-          <div className="grid grid-cols-1 xl:grid-cols-3 gap-4 lg:gap-6">
-            <div className="xl:col-span-2">
-              <LivePowerChart
-                samples={samples}
-                thresholdW={thresholdW}
-                isAboveThreshold={isAboveThreshold}
+
+          <div className="mt-3 flex flex-wrap items-center gap-3 text-[11px]">
+            <span
+              className={`inline-flex items-center gap-1.5 rounded-full border px-2.5 py-1 ${systemStatusTone}`}
+            >
+              <span
+                className={`h-1.5 w-1.5 rounded-full ${
+                  !latest
+                    ? "bg-slate-500"
+                    : alertsEnabled && isAboveThreshold
+                    ? "bg-red-400"
+                    : "bg-emerald-400"
+                }`}
               />
-            </div>
-            <div className="xl:col-span-1 space-y-4">
-              <ThresholdPanel
-                thresholdW={thresholdW}
-                onSave={setThresholdW}
-                isAboveThreshold={isAboveThreshold}
-                onRequestBrowserPermission={handleRequestBrowserPermission}
-                browserPermission={browserPermission}
-              />
-            </div>
+              {systemStatusLabel}
+            </span>
+            <span className="text-slate-500">
+              Alerts:{" "}
+              <span className="font-semibold text-slate-200">
+                {alertsEnabled ? "enabled" : "disabled"}
+              </span>
+              .
+            </span>
           </div>
         </section>
 
-        {/* Consumption breakdown section */}
-        <section>
+        {/* Analytics section */}
+        <section ref={analyticsRef} id="analytics" className="scroll-mt-20">
           <SectionHeader
-            title="Consumption breakdown"
-            subtitle="Understand when and where energy is being used across the day."
+            title="Analytics"
+            subtitle="Understand how consumption evolves over time with detailed trends and projections."
           />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
             <div className="lg:col-span-2 space-y-4">
+              <LivePowerChart
+                samples={samples}
+                thresholdW={thresholdW}
+                isAboveThreshold={alertsEnabled && isAboveThreshold}
+              />
               <DailyEnergyBarChart data={hourlyBreakdown} />
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-[11px]">
+                <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
+                  <p className="text-slate-400 mb-1">Peak usage</p>
+                  <p className="text-sm font-semibold text-slate-100">
+                    {insights.peakPowerW.toFixed(0)} W
+                  </p>
+                  <p className="text-slate-500 mt-0.5">
+                    Observed at{" "}
+                    <span className="font-medium text-slate-200">
+                      {insights.peakPowerTime
+                        ? insights.peakPowerTime.toLocaleTimeString(undefined, {
+                            hour12: false,
+                            hour: "2-digit",
+                            minute: "2-digit",
+                            second: "2-digit"
+                          })
+                        : "–"}
+                    </span>
+                    .
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
+                  <p className="text-slate-400 mb-1">Average consumption</p>
+                  <p className="text-sm font-semibold text-slate-100">
+                    {insights.averagePowerW.toFixed(1)} W
+                  </p>
+                  <p className="text-slate-500 mt-0.5">
+                    Rolling average across the recent samples.
+                  </p>
+                </div>
+                <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
+                  <p className="text-slate-400 mb-1">Monthly projection</p>
+                  <p className="text-sm font-semibold text-slate-100">
+                    {insights.estimatedMonthlyKwh.toFixed(1)} kWh
+                  </p>
+                  <p className="text-slate-500 mt-0.5">
+                    Simple forecast from today&apos;s energy usage × 30 days.
+                  </p>
+                </div>
+              </div>
             </div>
             <div className="lg:col-span-1 space-y-4">
               <EnergyDistributionPie data={distribution} />
@@ -221,20 +310,37 @@ export const DashboardPage = ({ onBackToLanding }: DashboardPageProps) => {
           </div>
         </section>
 
-        {/* Intelligence & alerts section */}
-        <section>
+        {/* Alerts section */}
+        <section ref={alertsRef} id="alerts" className="scroll-mt-20">
           <SectionHeader
-            title="Insights & alerts"
-            subtitle="Automatically derived insights and the latest threshold events."
+            title="Alerts"
+            subtitle="Configure safety limits, control notifications, and review the alert history."
           />
           <div className="grid grid-cols-1 lg:grid-cols-3 gap-4 lg:gap-6">
-            <div className="lg:col-span-2">
-              <InsightsCards insights={insights} />
+            <div className="lg:col-span-2 space-y-4">
+              <ThresholdPanel
+                thresholdW={thresholdW}
+                onSave={setThresholdW}
+                isAboveThreshold={isAboveThreshold}
+                alertsEnabled={alertsEnabled}
+                onToggleAlerts={() => setAlertsEnabled((prev) => !prev)}
+                onRequestBrowserPermission={handleRequestBrowserPermission}
+                browserPermission={browserPermission}
+              />
             </div>
             <div className="lg:col-span-1">
               <NotificationPanel notifications={notifications} />
             </div>
           </div>
+        </section>
+
+        {/* Insights section */}
+        <section ref={insightsRef} id="insights" className="scroll-mt-20">
+          <SectionHeader
+            title="Insights"
+            subtitle="Automatically derived usage patterns and energy saving suggestions."
+          />
+          <InsightsCards insights={insights} />
         </section>
       </div>
     </DashboardShell>

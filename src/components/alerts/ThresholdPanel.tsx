@@ -4,6 +4,8 @@ type ThresholdPanelProps = {
   thresholdW: number;
   onSave: (value: number) => void;
   isAboveThreshold: boolean;
+  alertsEnabled: boolean;
+  onToggleAlerts: () => void;
   onRequestBrowserPermission: () => void;
   browserPermission: NotificationPermission | "unsupported";
 };
@@ -12,6 +14,8 @@ export const ThresholdPanel = ({
   thresholdW,
   onSave,
   isAboveThreshold,
+  alertsEnabled,
+  onToggleAlerts,
   onRequestBrowserPermission,
   browserPermission
 }: ThresholdPanelProps) => {
@@ -75,34 +79,69 @@ export const ThresholdPanel = ({
         </p>
       </form>
 
-      <div className="space-y-2">
-        <p className="text-[11px] text-slate-400 font-medium uppercase tracking-[0.18em]">
-          Browser notifications
-        </p>
-        <button
-          type="button"
-          onClick={onRequestBrowserPermission}
-          disabled={browserPermission === "unsupported"}
-          className="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/60 px-3 py-1.5 text-[11px] text-slate-300 hover:border-primary-500/80 hover:bg-slate-900/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
-        >
-          <span
-            className={`h-1.5 w-1.5 rounded-full ${
-              browserPermission === "granted"
-                ? "bg-emerald-400"
-                : browserPermission === "denied"
-                ? "bg-red-500"
-                : "bg-amber-400"
+      <div className="space-y-3">
+        <div className="flex items-center justify-between gap-2">
+          <div>
+            <p className="text-[11px] text-slate-400 font-medium uppercase tracking-[0.18em]">
+              Alerts
+            </p>
+            <p className="text-[11px] text-slate-500">
+              Enable or pause threshold-based monitoring.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={onToggleAlerts}
+            className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-1 text-[11px] border transition-colors ${
+              alertsEnabled
+                ? "bg-emerald-500/10 border-emerald-400/70 text-emerald-200"
+                : "bg-slate-900/80 border-slate-700 text-slate-300"
             }`}
-          />
-          {browserStatusLabel}
-        </button>
-        <p className="text-[11px] text-slate-500">
-          A desktop notification will be pushed whenever live power crosses the
-          threshold.
-        </p>
+          >
+            <span
+              className={`h-3 w-5 rounded-full flex items-center ${
+                alertsEnabled ? "bg-emerald-500/80" : "bg-slate-600"
+              }`}
+            >
+              <span
+                className={`h-2.5 w-2.5 rounded-full bg-slate-950 transform transition-transform duration-150 ${
+                  alertsEnabled ? "translate-x-2.5" : "translate-x-0.5"
+                }`}
+              />
+            </span>
+            {alertsEnabled ? "Enabled" : "Disabled"}
+          </button>
+        </div>
+
+        <div className="space-y-2">
+          <p className="text-[11px] text-slate-400 font-medium uppercase tracking-[0.18em]">
+            Browser notifications
+          </p>
+          <button
+            type="button"
+            onClick={onRequestBrowserPermission}
+            disabled={browserPermission === "unsupported"}
+            className="inline-flex items-center gap-2 rounded-full border border-slate-700/80 bg-slate-900/60 px-3 py-1.5 text-[11px] text-slate-300 hover:border-primary-500/80 hover:bg-slate-900/90 disabled:opacity-60 disabled:cursor-not-allowed transition-colors"
+          >
+            <span
+              className={`h-1.5 w-1.5 rounded-full ${
+                browserPermission === "granted"
+                  ? "bg-emerald-400"
+                  : browserPermission === "denied"
+                  ? "bg-red-500"
+                  : "bg-amber-400"
+              }`}
+            />
+            {browserStatusLabel}
+          </button>
+          <p className="text-[11px] text-slate-500">
+            A desktop notification will be pushed whenever live power crosses
+            the threshold while alerts are enabled.
+          </p>
+        </div>
       </div>
 
-      {isAboveThreshold && (
+      {isAboveThreshold && alertsEnabled && (
         <div className="mt-2 rounded-xl border border-red-500/40 bg-red-500/5 px-3 py-2.5 text-[11px] text-red-200 flex gap-2">
           <span className="mt-0.5">⚠️</span>
           <div>
