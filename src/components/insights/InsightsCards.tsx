@@ -2,9 +2,17 @@ import { ElectricityInsights } from "../../types/electricity";
 
 type InsightsCardsProps = {
   insights: ElectricityInsights;
+  nextHourPredictionKw?: number | null;
+  predictionLoading?: boolean;
+  predictionError?: string | null;
 };
 
-export const InsightsCards = ({ insights }: InsightsCardsProps) => {
+export const InsightsCards = ({
+  insights,
+  nextHourPredictionKw,
+  predictionLoading,
+  predictionError
+}: InsightsCardsProps) => {
   const { peakPowerW, peakPowerTime, averagePowerW, estimatedMonthlyKwh } =
     insights;
 
@@ -55,15 +63,24 @@ export const InsightsCards = ({ insights }: InsightsCardsProps) => {
             Simple projection from today&apos;s energy so far × 30 days.
           </p>
         </div>
-        <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3">
-          <p className="text-slate-400 mb-1.5">Health</p>
-          <p className="text-sm font-semibold text-emerald-400">
-            Stable, monitor surges
+        <div className="rounded-xl border border-slate-800/80 bg-slate-950/60 p-3 space-y-1">
+          <p className="text-slate-400 mb-1.5">Next hour forecast</p>
+          <p className="text-sm font-semibold text-slate-100">
+            {predictionLoading
+              ? "Fetching…"
+              : typeof nextHourPredictionKw === "number"
+              ? `${nextHourPredictionKw.toFixed(3)} kW`
+              : "–"}
           </p>
           <p className="text-slate-500 mt-0.5">
-            Keep an eye on periods where live power stays above your
-            configured threshold.
+            Forecast from the trained LSTM model using the last 24 readings
+            from ThingSpeak.
           </p>
+          {predictionError && !predictionLoading && (
+            <p className="text-[10px] text-red-400">
+              Unable to fetch prediction: {predictionError}
+            </p>
+          )}
         </div>
       </div>
     </div>

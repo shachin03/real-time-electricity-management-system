@@ -1,0 +1,8 @@
+node_modules/
+dist/
+
+# Local backend runtime/config artifacts
+backend/.env
+backend/household_power_consumption.txt
+backend/energy_model.h5
+backend/scaler.pkl

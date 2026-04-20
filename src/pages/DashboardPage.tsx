@@ -32,6 +32,12 @@ export const DashboardPage = () => {
   const [alertsEnabled, setAlertsEnabled] = useState(true);
   const lastPowerRef = useRef<number | undefined>(undefined);
 
+  const [nextHourPredictionKw, setNextHourPredictionKw] = useState<
+    number | null
+  >(null);
+  const [predictionLoading, setPredictionLoading] = useState(false);
+  const [predictionError, setPredictionError] = useState<string | null>(null);
+
   const isAboveThreshold =
     latest !== undefined ? latest.power > thresholdW : false;
 
@@ -112,6 +118,60 @@ export const DashboardPage = () => {
       setBrowserPermission(p);
     });
   };
+
+  // Periodically fetch ML prediction from the Flask backend
+  useEffect(() => {
+    let cancelled = false;
+
+    const fetchPrediction = async () => {
+      try {
+        setPredictionLoading(true);
+        setPredictionError(null);
+
+        const res = await fetch("http://localhost:5000/predict");
+        if (!res.ok) {
+          const text = await res.text();
+          throw new Error(
+            `HTTP ${res.status}: ${text.slice(0, 120) || "backend error"}`
+          );
+        }
+
+        const data = (await res.json()) as {
+          next_hour_prediction_kW?: number;
+          next_hour_prediction_kw?: number;
+        };
+
+        const value =
+          typeof data.next_hour_prediction_kW === "number"
+            ? data.next_hour_prediction_kW
+            : typeof data.next_hour_prediction_kw === "number"
+            ? data.next_hour_prediction_kw
+            : null;
+
+        if (!cancelled) {
+          setNextHourPredictionKw(value);
+        }
+      } catch (err: any) {
+        if (!cancelled) {
+          setPredictionError(err?.message ?? "Unknown error");
+          setNextHourPredictionKw(null);
+        }
+      } finally {
+        if (!cancelled) {
+          setPredictionLoading(false);
+        }
+      }
+    };
+
+    // Initial fetch + refresh every 60s
+    fetchPrediction();
+    const id = window.setInterval(fetchPrediction, 60_000);
+
+    return () => {
+      cancelled = true;
+      window.clearInterval(id);
+    };
+  }, []);
 
   const rightHeaderSlot = latest && (
     <div className="flex items-center gap-3 text-[11px] text-slate-400">
@@ -340,7 +400,12 @@ export const DashboardPage = () => {
             title="Insights"
             subtitle="Automatically derived usage patterns and energy saving suggestions."
           />
-          <InsightsCards insights={insights} />
+          <InsightsCards
+            insights={insights}
+            nextHourPredictionKw={nextHourPredictionKw}
+            predictionLoading={predictionLoading}
+            predictionError={predictionError}
+          />
         </section>
       </div>
     </DashboardShell>
